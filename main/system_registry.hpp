@@ -243,6 +243,7 @@ protected:
             CHORD_MINOR_SWAP_PRESS_COUNT,
             CHORD_SEMITONE_FLAT_PRESS_COUNT,
             CHORD_SEMITONE_SHARP_PRESS_COUNT,
+            PREVIEW_PLAY_STATE,
         };
 
         // 音が鳴ったパートへの発光エフェクト設定
@@ -356,7 +357,7 @@ protected:
         def::play::auto_play_state_t getAutoplayState(void) const { return (def::play::auto_play_state_t)get8(CHORD_AUTOPLAY_STATE); }
         def::play::auto_play_state_t getGuiAutoplayState(void) const {
             auto res = def::play::auto_play_state_t::auto_play_none;
-            auto seq = getSequenceMode();
+            auto seq = system_registry->currentSequenceMode();
 
             // ソング記録モードはガイド演奏モードと同等扱いとする
             if (getGuiFlag_SongRecording()) { seq = def::seqmode::seq_guide_play; }
@@ -465,6 +466,10 @@ protected:
             if (get8(CHORD_SEMITONE_SHARP_PRESS_COUNT)) { ++res; }
             return res;
         }
+
+        // プレビュー演奏状態
+        void setPreviewPlay(bool preview) { set8(PREVIEW_PLAY_STATE, preview); }
+        bool getPreviewPlay(void) const { return get8(PREVIEW_PLAY_STATE); }
     } runtime_info;
 
     struct reg_popup_notify_t : public registry_t {
@@ -1503,6 +1508,38 @@ protected:
     clipboard_contetn_t clipboard_content;    // コピー/ペースト(クリップボード)の内容
 
     registry_t drum_mapping { 16, 0, registry_t::DATA_SIZE_8 }; // ドラム演奏モードのコマンドとノートナンバーのマッピングテーブル
+
+    // プレビュー演奏時は保存されたSequenceModeを変更せず、仮のモードを返す
+    def::seqmode::seqmode_t currentSequenceMode(void) const {
+        auto mode = runtime_info.getSequenceMode();
+        if (runtime_info.getPreviewPlay()) {
+            // プレビュー演奏は強制的にオートソング扱いにする
+            mode = def::seqmode::seq_auto_song;
+        }
+
+        // ソングデータのシーケンスがない場合、ガイド演奏やオートソングはできないのでビートプレイにフォールバックさせる
+        if (current_sequence->info.getLength() == 0) {
+            if (mode == def::seqmode::seq_auto_song
+             || mode == def::seqmode::seq_guide_play) {
+                mode = def::seqmode::seq_beat_play;
+            }
+        }
+
+        // オートプレイが発動している場合
+        auto autoplay_state = runtime_info.getAutoplayState();
+        if (autoplay_state != def::play::auto_play_state_t::auto_play_none) {
+            if (mode == def::seqmode::seq_free_play) {
+                // フリープレイモードの場合はビート演奏モード扱いにする
+                mode = def::seqmode::seq_beat_play;
+            } else
+            if (mode == def::seqmode::seq_guide_play) {
+                // ガイドプレイモードの場合はオートソングモード扱いにする
+                mode = def::seqmode::seq_auto_song;
+            }
+        }
+
+        return mode;
+    }
 
     void checkSongModified(void) const;
 

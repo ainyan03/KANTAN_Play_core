@@ -108,9 +108,24 @@ bool task_kantanplay_t::commandProccessor(void)
   // case def::command::sequence_play:
   //   procSequencePlay(command_param, is_pressed);
   //   break;
+  case def::command::preview_switch:
+    if (is_pressed) {
+      // オートプレイ停止指示
+      system_registry->player_command.addQueue( { def::command::autoplay_switch, def::command::autoplay_switch_t::autoplay_stop } );
+      const auto param = command_param.getParam();
+      bool is_play = (param != def::command::preview_switch_t::preview_stop);
+      system_registry->runtime_info.setPreviewPlay(is_play);
+      if (is_play) {
+        system_registry->player_command.addQueue( { def::command::autoplay_switch, def::command::autoplay_switch_t::autoplay_start } );
+      }
+      resetStep();
+      system_registry->runtime_info.setSequenceStepIndex(0);
+    }
+    break;
+
   case def::command::autoplay_switch:
     { // 自動演奏モードのオン・オフのトグル
-      auto seq_mode = system_registry->runtime_info.getSequenceMode();
+      auto seq_mode = system_registry->currentSequenceMode();
       auto autoplay_state = system_registry->runtime_info.getAutoplayState();
       auto prev_autoplay_state = autoplay_state;
 
@@ -137,13 +152,6 @@ bool task_kantanplay_t::commandProccessor(void)
             break;
 
           case def::command::autoplay_switch_t::autoplay_start:
-            if (seq_mode == def::seqmode::seq_free_play) { // フリープレイモードの場合はビート演奏モードに移行する
-              seq_mode = def::seqmode::seq_beat_play;
-            } else
-            if (seq_mode == def::seqmode::seq_guide_play) { // ガイドプレイモードの場合はオートソングモードに移行する
-              seq_mode = def::seqmode::seq_auto_song;
-            }
-            system_registry->runtime_info.setSequenceMode( seq_mode );
             if (autoplay_state != def::play::auto_play_state_t::auto_play_running) {
               autoplay_state = def::play::auto_play_state_t::auto_play_waiting;
               system_registry->runtime_info.setAutoplayState(autoplay_state);
@@ -321,7 +329,7 @@ uint32_t task_kantanplay_t::autoProc(void)
         // 次回のオンビート自動演奏までの時間を更新する
         remain_usec += onbeat_cycle_usec;
 
-        switch (system_registry->runtime_info.getSequenceMode()) {
+        switch (system_registry->currentSequenceMode()) {
         // オートソング(シーケンス演奏)の場合はステップを進める
         case def::seqmode::seq_auto_song:
           system_registry->operator_command.addQueue( { def::command::sequence_step_ud, 1 } );
@@ -533,7 +541,7 @@ void task_kantanplay_t::procChordBeat(const def::command::command_param_t& comma
   _auto_play_onbeat_remain_usec = -1;
   _auto_play_offbeat_remain_usec = -1;
 
-  auto seqmode = system_registry->runtime_info.getSequenceMode();
+  auto seqmode = system_registry->currentSequenceMode();
   if (seqmode == def::seqmode::seq_free_play
    || seqmode == def::seqmode::seq_beat_play
    || system_registry->runtime_info.getGuiFlag_SongRecording()
@@ -611,7 +619,7 @@ void task_kantanplay_t::setOnbeatCycle(int32_t usec)
 {
   uint32_t song_tempo = getOnbeatCycleBySongTempo();
 
-  auto seqmode = system_registry->runtime_info.getSequenceMode();
+  auto seqmode = system_registry->currentSequenceMode();
   if (seqmode == def::seqmode::seq_free_play) {
     // 一定時間経過後にアルペジエータを先頭に戻す時間を更新する
     _arpeggio_reset_remain_usec = song_tempo * def::app::arpeggio_reset_timeout_beats;
@@ -1064,7 +1072,7 @@ void task_kantanplay_t::procSequenceStepUd(const def::command::command_param_t& 
   if (current_step >= 0 && current_step <= system_registry->current_sequence->info.getLength()) {
     system_registry->runtime_info.setSequenceStepIndex(current_step);
   } else {
-    auto mode = system_registry->runtime_info.getSequenceMode();
+    auto mode = system_registry->currentSequenceMode();
     if (mode == def::seqmode::seq_auto_song) {
       system_registry->runtime_info.setAutoplayState(def::play::auto_play_state_t::auto_play_waiting);
 //      system_registry->runtime_info.setSequenceStepIndex(0);

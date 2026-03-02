@@ -466,7 +466,7 @@ Button Index mapping
   };
 
   namespace command {
-    // 内部コマンド
+    // 内部コマンド (command_name_tableの順序と一致させること)
     enum command_t : uint8_t {
       none = 0,
       menu_function,
@@ -487,6 +487,7 @@ Button Index mapping
       edit_exit,
       edit_enc2_target,
       autoplay_switch,
+      preview_switch,
       recording_control,
       note_scale_set, note_scale_ud,
       sound_effect,
@@ -512,6 +513,7 @@ Button Index mapping
       command_max,
     };
 
+    // コマンド名称テーブル (command_tの順序と一致させること)
     static constexpr const char** const command_name_table[] = {
       (const char*[]){ nullptr, },    // none
       (const char*[]){ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Back", "OK", "Down", "Up", "Exit" }, // menu_function
@@ -532,6 +534,7 @@ Button Index mapping
       (const char*[]){ "-", "Exit", "Save" },            // edit_exit
       (const char*[]){ "-", "Vol %", "Oct", "Voicing", "Velo %", "Tone", "Anchor", "LoopLen", "Stroke" },   // edit_enc2_target
       (const char*[]){ "-", "Auto", "Play", "Stop", "Pause" },  // autoplay_switch
+      (const char*[]){ "Stop", "Play" },  // preview_switch
       (const char*[]){ "Stop", "Rec", },  // recording_control
       (const char*[]){ "-", "Penta", "Major", "Chroma", "Blues", "Japan", }, // note_scale_set
     };
@@ -549,6 +552,9 @@ Button Index mapping
     };
     enum autoplay_switch_t : uint8_t {
       autoplay_off = 0, autoplay_toggle, autoplay_start, autoplay_stop, autoplay_pause, autoplay_beat,
+    };
+    enum preview_switch_t : uint8_t {
+      preview_stop = 0, preview_play,
     };
     enum recording_control_t : uint8_t {
       rec_stop = 0, rec_start,
@@ -741,7 +747,7 @@ Button Index mapping
     static constexpr const command_param_array_t command_mapping_menu_table[] = {
       { menu_function, mf_1 }, { menu_function, mf_2 }, { menu_function, mf_3 }, { menu_function, mf_0 }, { menu_function, mf_exit, },
       { menu_function, mf_4 }, { menu_function, mf_5 }, { menu_function, mf_6 }, { menu_function, mf_back }, { menu_function, mf_enter },
-      { menu_function, mf_7 }, { menu_function, mf_8 }, { menu_function, mf_9 }, { autoplay_switch, autoplay_stop }, { autoplay_switch, autoplay_start },
+      { menu_function, mf_7 }, { menu_function, mf_8 }, { menu_function, mf_9 }, { preview_switch, preview_stop }, { preview_switch, preview_play },
       { sub_button  , 1 }, { sub_button, 2 }, { sub_button, 3 }, { sub_button, 4 },
       { menu_function, mf_back }, { menu_function, mf_enter }, // SIDE_1, SIDE_2
       { mapping_switch, 1}, { mapping_switch, 2 }, { mapping_switch, 3}, // KNOB_L, KNOB_R, KNOB_K
