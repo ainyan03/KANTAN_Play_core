@@ -11,6 +11,8 @@
 
 #include "system_registry.hpp"
 
+#include "task_wifi/task_wifi_api.hpp"
+
 #if defined (M5UNIFIED_PC_BUILD)
 namespace kanplay_ns {
 
@@ -98,7 +100,15 @@ asm (\
   ".section \".text\"\n")
 
 IMPORT_FILE(.rodata, "incbin/html/wifi.html", html_wifi);
-IMPORT_FILE(.rodata, "incbin/html/main.html", html_main);
+
+// ブラウザUIの配信元URL。platformio.ini の build_flags で上書き可能。
+// 通常モードと developer mode で別アカウントの GitHub Pages を参照する。
+#ifndef KANPLAY_UI_BASE
+  #define KANPLAY_UI_BASE     "https://instachord.github.io/KANTAN_Play_core/ui"
+#endif
+#ifndef KANPLAY_UI_BASE_DEV
+  #define KANPLAY_UI_BASE_DEV "https://ainyan03.github.io/KANTAN_Play_core/ui"
+#endif
 
 namespace kanplay_ns {
 //-------------------------------------------------------------------------
@@ -461,9 +471,30 @@ static esp_err_t response_wifi_handler(httpd_req_t *req)
 
 static esp_err_t response_main_handler(httpd_req_t *req)
 {
+  // developer mode ON のときだけ別ホストへ向ける (アカウント切替で UI 検証用)
+  const char* base = system_registry->runtime_info.getDeveloperMode()
+                   ? KANPLAY_UI_BASE_DEV
+                   : KANPLAY_UI_BASE;
   httpd_resp_set_type(req, "text/html");
-  httpd_resp_send(req, html_main, (uint32_t)sizeof_html_main);
-  httpd_resp_send_chunk(req, nullptr, 0);
+  httpd_resp_sendstr_chunk(req,
+    "<!doctype html><html lang=\"en\"><head>"
+    "<meta charset=\"utf-8\">"
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+    "<title>KANTAN Play</title>"
+    "<link rel=\"stylesheet\" href=\"");
+  httpd_resp_sendstr_chunk(req, base);
+  httpd_resp_sendstr_chunk(req,
+    "/app.css\"></head><body>"
+    "<div id=\"app\" style=\"font-family:sans-serif;padding:16px\">Loading…</div>"
+    "<script>window.KANPLAY={api:location.origin};"
+    "setTimeout(function(){var a=document.getElementById('app');"
+    "if(a&&a.firstChild&&a.firstChild.nodeType===3&&a.firstChild.nodeValue.indexOf('Loading')===0){"
+    "a.innerHTML='<p>Failed to load the UI.<br>Please check your internet connection.</p>';}"
+    "},10000);</script>"
+    "<script src=\"");
+  httpd_resp_sendstr_chunk(req, base);
+  httpd_resp_sendstr_chunk(req, "/app.js\" defer></script></body></html>");
+  httpd_resp_sendstr_chunk(req, nullptr);
   return ESP_OK;
 }
 
@@ -806,12 +837,17 @@ static constexpr const httpd_uri uri_table[] = {
   { "/wifi"   , HTTP_POST, response_post_wifi_handler, nullptr, false, false, nullptr },
   { "/done"   , HTTP_POST, response_done_handler     , nullptr, false, false, nullptr },
   { "/ws"     , HTTP_GET , response_ws_handler       , nullptr,  true, false, nullptr },
+  // /api/* 系は task_wifi/task_wifi_api.cpp で別途登録
 };
 
 static httpd_handle_t start_webserver(void)
 {
   httpd_handle_t server = NULL;
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  // /api/files/* など `*` を含むパターンを使うためにワイルドカード一致を有効化
+  config.uri_match_fn = httpd_uri_match_wildcard;
+  // uri_table[] の数に応じてハンドラ上限を引き上げる
+  config.max_uri_handlers = 24;
 
   M5_LOGI("Starting server on port: '%d'", config.server_port);
   if (httpd_start(&server, &config) == ESP_OK) {
@@ -820,6 +856,7 @@ static httpd_handle_t start_webserver(void)
     for (auto& uri : uri_table) {
       httpd_register_uri_handler(server, &uri);
     }
+    task_wifi_api_register_uris(server);
 
     return server;
   }
@@ -831,6 +868,7 @@ static httpd_handle_t start_webserver(void)
 static esp_err_t stop_webserver(httpd_handle_t server)
 {
   if (server) {
+    task_wifi_api_unregister_uris(server);
     for (auto& uri : uri_table) {
       httpd_unregister_uri(server, uri.uri);
     }
