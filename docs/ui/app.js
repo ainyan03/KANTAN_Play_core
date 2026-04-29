@@ -109,9 +109,13 @@
   async function doDownload(name) {
     try {
       setStatus('Downloading ' + name + ' …');
-      const text = await api('GET', '/api/files/' + currentDir + '/' + encodeURIComponent(name));
-      const body = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
-      const blob = new Blob([body], { type: 'application/json' });
+      const r = await fetch(API + '/api/files/' + currentDir + '/' + encodeURIComponent(name));
+      if (!r.ok) {
+        let msg = r.status + ' ' + r.statusText;
+        try { const j = await r.json(); if (j && j.error) msg += ': ' + j.error; } catch (_) { /* not json */ }
+        throw new Error(msg);
+      }
+      const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = el('a', { href: url, download: name });
       document.body.appendChild(a);
